@@ -184,7 +184,7 @@ def run_cli(recipe: Optional[str], ask: Optional[str], params_kv: List[str]) -> 
         return 1
 
     pretty_print_result(result, workdir)
-    return 0
+    return 0 if result.get("status") == "OK" else 1
 
 
 
