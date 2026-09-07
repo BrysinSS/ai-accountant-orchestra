@@ -1,0 +1,2 @@
+transaction_date,aisle,product_name,final_amount
+not-a-date,Produce,Apples,not-money

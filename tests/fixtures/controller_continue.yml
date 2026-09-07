@@ -1,0 +1,14 @@
+version: 1
+policy:
+  continue_on_error: false
+steps:
+  - name: invalid_period
+    fn: tools.analysis.period.parse_quarter
+    args:
+      period: invalid
+    options:
+      continue_on_error: true
+  - name: downstream
+    fn: tools.analysis.tax.load_rules
+    args:
+      path: rules/nl_vat_2025.yaml

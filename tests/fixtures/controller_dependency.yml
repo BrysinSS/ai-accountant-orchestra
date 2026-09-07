@@ -1,0 +1,18 @@
+version: 1
+steps:
+  - name: rules
+    fn: tools.analysis.tax.load_rules
+    args:
+      path: rules/nl_vat_2025.yaml
+  - name: vat
+    fn: tools.analysis.tax.compute_vat
+    args:
+      data:
+        gross_revenue: 121.0
+        by_group:
+          - key: Household
+            gross: 121.0
+            net: 121.0
+            n: 1
+      rules: "${steps.rules.result}"
+      apply_kor: false
