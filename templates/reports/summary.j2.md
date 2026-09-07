@@ -1,7 +1,6 @@
 # BTW Summary
 
-_Run date:_ **{{ today or run_date or generation_date or "" }}**  
-_Period:_ **{{ period or (params and params.period) or "N/A" }}**
+_Period:_ **{{ period }}**
 
 ## Overview
 - **Transactions:** {{ summary.n_transactions or 0 }}
@@ -15,6 +14,9 @@ _Period:_ **{{ period or (params and params.period) or "N/A" }}**
 ## VAT Breakdown
 - **Low VAT (9%)**: {{ "%.2f"|format(((vat_breakdown.low) if vat_breakdown else 0)|float) }}
 - **High VAT (21%)**: {{ "%.2f"|format(((vat_breakdown.high) if vat_breakdown else 0)|float) }}
+- **Total VAT represented by this demo calculation**: {{ "%.2f"|format((summary.vat_total or 0)|float) }}
 
 ## KOR Status
-{% if kor_applied %}Kleineondernemersregeling (KOR) applied: YES{% else %}Kleineondernemersregeling (KOR) applied: NO{% endif %}
+{% if kor_applied %}Simplified KOR switch applied: YES{% else %}Simplified KOR switch applied: NO{% endif %}
+
+_Demonstration output only; not a BTW return and not suitable for tax filing._

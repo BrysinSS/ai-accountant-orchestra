@@ -3,46 +3,51 @@ policy:
   continue_on_error: false
 
 steps:
-  - name: load_csv
-    fn: "tools.data_io.loader.load_dataframe"
+  - name: load_source
+    fn: tools.data_io.loader.load_source_dataframe
     args:
-      path: "data/demo_transactions.csv"
+      path: "${params.input | default('data/demo_transactions.csv')}"
 
-  - name: validate_schema
-    fn: "tools.validation.schema.validate_dataframe"
+  - name: validate_source
+    fn: tools.validation.schema.validate_dataframe
     args:
-      df: "${steps.load_csv.result | default(None)}"
-      schema_id: "kaggle_grocery_v1"
-    options:
-      continue_on_error: true  # не стопаем пайплайн, даже если валидация ругнётся
+      df: "${steps.load_source.result}"
+      schema_id: kaggle_grocery_v1
 
-  # Сводка по категориям
+  - name: normalize
+    fn: tools.data_io.loader.normalize_dataframe
+    args:
+      df: "${steps.load_source.result}"
+      config_path: config.yaml
+
+  - name: filter_period
+    fn: tools.analysis.period.filter_period
+    args:
+      df: "${steps.normalize.result}"
+      period: "${params.period}"
+
   - name: summarize
-    fn: "tools.analysis.bookkeeping.summarize"
+    fn: tools.analysis.bookkeeping.summarize
     args:
-      df: "${steps.load_csv.result | default(None)}"
-      groupby: "category"
+      df: "${steps.filter_period.result}"
+      groupby: category
 
-  # Сохранение summary через Jinja-шаблон (JSON + Markdown)
-  - name: save_summary
-    fn: "tools.data_io.exporter.save_summary"
+  - name: load_vat_rules
+    fn: tools.analysis.tax.load_rules
     args:
-      summary: "${steps.summarize.result | default({})}"
-      json_path: "workspace/summary_latest.json"
-      md_path: "workspace/summary_latest.md"
-      meta:
-        period: "${params.period | default('N/A')}"
-        kor_applied: true
-        vat_breakdown:
-          low: 0.0
-          high: 0.0
+      path: rules/nl_vat_2025.yaml
 
-  # Дополнительный рендер (если нужен для CLI-вывода)
-  - name: render_report
-    fn: "tools.reports.renderer.render_markdown"
+  - name: calculate_vat_demo
+    fn: tools.analysis.tax.compute_vat
     args:
-      df: "${steps.load_csv.result | default(None)}"
-      meta: "${steps.load_csv.result_meta | default({})}"
-      period: "${params.period | default('N/A')}"
-    options:
-      continue_on_error: true
+      data: "${steps.summarize.result}"
+      rules: "${steps.load_vat_rules.result}"
+      apply_kor: false
+
+  - name: save_artifacts
+    fn: tools.data_io.exporter.save_summary
+    args:
+      summary: "${steps.calculate_vat_demo.result}"
+      period: "${params.period}"
+      json_path: "${params.json_path | default('workspace/summary_latest.json')}"
+      md_path: "${params.md_path | default('workspace/summary_latest.md')}"

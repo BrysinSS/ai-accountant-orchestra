@@ -1,10 +1,13 @@
 from __future__ import annotations
 from typing import Dict, Any, Union
+from copy import deepcopy
 import json
 import os
 import pandas as pd
 import numpy as np
 import yaml
+
+from tools.analysis.money import round_money
 
 
 # ─────────────────────────────────────────────────────────────
@@ -66,7 +69,12 @@ def _kor_applies(total_gross: float, rules: Dict[str, Any]) -> bool:
 # ОСНОВНАЯ ФУНКЦИЯ
 # ─────────────────────────────────────────────────────────────
 
-def compute_vat(data: Union[pd.DataFrame, Dict[str, Any]], rules: Dict[str, Any]) -> Union[pd.DataFrame, Dict[str, Any]]:
+def compute_vat(
+    data: Union[pd.DataFrame, Dict[str, Any]],
+    rules: Dict[str, Any],
+    *,
+    apply_kor: bool = True,
+) -> Union[pd.DataFrame, Dict[str, Any]]:
     """
     Расширенная функция расчёта НДС для Нидерландов (2025).
     Поддерживает:
@@ -100,7 +108,7 @@ def compute_vat(data: Union[pd.DataFrame, Dict[str, Any]], rules: Dict[str, Any]
         df["vat"] = df["tax_amount"]
 
         total_gross = float(df["amount_gross"].sum())
-        kor = _kor_applies(total_gross, rules)
+        kor = bool(apply_kor and _kor_applies(total_gross, rules))
 
         if kor:
             df["tax_amount"] = 0.0
@@ -111,17 +119,19 @@ def compute_vat(data: Union[pd.DataFrame, Dict[str, Any]], rules: Dict[str, Any]
         high_sum = float(df.loc[np.isclose(df["effective_rate"], 0.21), "tax_amount"].sum())
 
         df.attrs["kor_applied"] = bool(kor)
-        df.attrs["vat_breakdown"] = {"low": low_sum, "high": high_sum}
+        df["tax_amount"] = df["tax_amount"].map(round_money)
+        df["vat"] = df["vat"].map(round_money)
+        df.attrs["vat_breakdown"] = {"low": round_money(low_sum), "high": round_money(high_sum)}
 
         return df
 
     # === Ветка 2: summary-словарь ===
     if isinstance(data, dict) and "by_group" in data:
-        summary = dict(data)
+        summary = deepcopy(data)
         by_group = summary.get("by_group") or []
         total_gross = float(summary.get("gross_revenue", 0.0))
 
-        kor = _kor_applies(total_gross, rules)
+        kor = bool(apply_kor and _kor_applies(total_gross, rules))
         category_rates = (rules or {}).get("category_rates") or {}
         default_rate = float((rules or {}).get("default_rate", 0.21))
 
@@ -131,10 +141,11 @@ def compute_vat(data: Union[pd.DataFrame, Dict[str, Any]], rules: Dict[str, Any]
             cat = str(g.get("key") or "")
             gross = float(g.get("gross", 0.0))
             rate = float(category_rates.get(cat, default_rate))
-            tax = 0.0 if kor else _vat_from_gross(gross, rate)
+            tax = 0.0 if kor else round_money(_vat_from_gross(gross, rate))
 
             g["effective_rate"] = rate
             g["tax_amount"] = tax
+            g["net"] = round_money(gross - tax)
 
             if np.isclose(rate, 0.09):
                 low_sum += tax
@@ -142,7 +153,9 @@ def compute_vat(data: Union[pd.DataFrame, Dict[str, Any]], rules: Dict[str, Any]
                 high_sum += tax
 
         summary["kor_applied"] = bool(kor)
-        summary["vat_breakdown"] = {"low": low_sum, "high": high_sum}
+        summary["vat_breakdown"] = {"low": round_money(low_sum), "high": round_money(high_sum)}
+        summary["vat_total"] = round_money(low_sum + high_sum)
+        summary["net_revenue"] = round_money(total_gross - summary["vat_total"])
         summary["by_group"] = by_group
 
         return summary

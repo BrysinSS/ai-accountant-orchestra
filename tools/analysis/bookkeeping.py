@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from typing import Dict, List, Any
-import math
-
 import numpy as np
 import pandas as pd
+
+from tools.analysis.money import round_money
 
 
 def _validate_internal_df(df: pd.DataFrame) -> None:
@@ -22,20 +22,16 @@ def _validate_internal_df(df: pd.DataFrame) -> None:
         )
 
     # amount_gross must be numeric
-    if not np.issubdtype(df["amount_gross"].dtype, np.number):
+    if not pd.api.types.is_numeric_dtype(df["amount_gross"]):
         raise ValueError("Column 'amount_gross' must be numeric (float).")
 
     # vat_rate can be float with NaN allowed
-    if not np.issubdtype(df["vat_rate"].dtype, np.number):
+    if not pd.api.types.is_numeric_dtype(df["vat_rate"]):
         raise ValueError("Column 'vat_rate' must be numeric (float), NaN allowed.")
 
     # date is string 'YYYY-MM-DD'; we also try to parse to datetime for grouping
-    if not np.issubdtype(df["date"].dtype, np.object_):
-        # Accept pandas string dtype as well
-        try:
-            df["date"].astype(str)
-        except Exception as e:
-            raise ValueError(f"Column 'date' must be string-like: {e}")
+    if not (pd.api.types.is_object_dtype(df["date"]) or pd.api.types.is_string_dtype(df["date"])):
+        raise ValueError("Column 'date' must be string-like.")
 
 
 def _compute_net_revenue(df: pd.DataFrame, gross_revenue: float) -> float:
@@ -152,8 +148,8 @@ def summarize(df: pd.DataFrame, groupby: str) -> Dict[str, Any]:
             by_group.append(
                 {
                     "key": str(row["key"]),
-                    "gross": float(row["gross"]),
-                    "net": float(row["net"]),
+                    "gross": round_money(row["gross"]),
+                    "net": round_money(row["net"]),
                     "n": int(row["n"]),
                 }
             )
@@ -161,9 +157,9 @@ def summarize(df: pd.DataFrame, groupby: str) -> Dict[str, Any]:
     # Final summary dict
     summary = {
         "n_transactions": n_transactions,
-        "gross_revenue": gross_revenue,
-        "net_revenue": float(net_revenue),
-        "returns": {"n": returns_n, "sum": returns_sum},
+        "gross_revenue": round_money(gross_revenue),
+        "net_revenue": round_money(net_revenue),
+        "returns": {"n": returns_n, "sum": round_money(returns_sum)},
         "by_group": by_group,
     }
     return summary
