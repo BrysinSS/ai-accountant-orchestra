@@ -18,7 +18,7 @@ import pandas as pd
 
 KAGGLE_GROCERY_V1 = "kaggle_grocery_v1"
 
-REQUIRED_ALWAYS = ["transaction_date", "product_name"]
+REQUIRED_ALWAYS = ["transaction_date", "product_name", "aisle"]
 REQUIRED_FINAL = ["final_amount"]
 REQUIRED_FALLBACK = ["total_amount", "discount_amount"]
 
@@ -74,13 +74,15 @@ def validate_dataframe(df, schema_id: str = KAGGLE_GROCERY_V1) -> Dict[str, obje
         dates = pd.to_datetime(df["transaction_date"], errors="coerce")
         if dates.isna().any():
             errs.append(f"Invalid transaction_date values: {int(dates.isna().sum())} row(s).")
-        amount_column = "final_amount" if "final_amount" in df.columns else None
-        if amount_column is None and {"total_amount", "discount_amount"}.issubset(df.columns):
+        preferred = pd.to_numeric(df["final_amount"], errors="coerce") if "final_amount" in df.columns else None
+        if preferred is not None and not preferred.isna().all():
+            invalid_amounts = preferred.isna()
+        elif {"total_amount", "discount_amount"}.issubset(df.columns):
             total = pd.to_numeric(df["total_amount"], errors="coerce")
             discount = pd.to_numeric(df["discount_amount"], errors="coerce")
             invalid_amounts = total.isna() | discount.isna()
         else:
-            invalid_amounts = pd.to_numeric(df[amount_column], errors="coerce").isna()
+            invalid_amounts = preferred.isna()
         if invalid_amounts.any():
             errs.append(f"Invalid monetary values: {int(invalid_amounts.sum())} row(s).")
 

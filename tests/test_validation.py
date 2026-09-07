@@ -21,3 +21,10 @@ def test_malformed_values_are_validation_errors():
     assert report["valid"] is False
     assert any("transaction_date" in error for error in report["errors"])
     assert any("monetary" in error for error in report["errors"])
+
+
+def test_valid_fallback_amount_is_accepted_when_preferred_is_empty():
+    source = load_source_dataframe("data/demo_transactions.csv").head(1).copy()
+    source["final_amount"] = None
+    report = validate_dataframe(source)
+    assert report["valid"] is True

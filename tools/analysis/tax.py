@@ -114,13 +114,14 @@ def compute_vat(
             df["tax_amount"] = 0.0
             df["vat"] = 0.0
 
+        df["tax_amount"] = df["tax_amount"].map(round_money)
+        df["vat"] = df["tax_amount"]
+
         # Разбивка low/high
         low_sum = float(df.loc[np.isclose(df["effective_rate"], 0.09), "tax_amount"].sum())
         high_sum = float(df.loc[np.isclose(df["effective_rate"], 0.21), "tax_amount"].sum())
 
         df.attrs["kor_applied"] = bool(kor)
-        df["tax_amount"] = df["tax_amount"].map(round_money)
-        df["vat"] = df["vat"].map(round_money)
         df.attrs["vat_breakdown"] = {"low": round_money(low_sum), "high": round_money(high_sum)}
 
         return df
