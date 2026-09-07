@@ -31,7 +31,12 @@ Observed result: exit 1 at `filter_period`; a failure JSON and failed NDJSON ste
 
 ## CI
 
-The workflow is configured for clean installation and pytest on Python 3.11 and 3.12. Hosted GitHub Actions status is pending push at the time of this evidence commit and is not represented as green yet.
+Hosted GitHub Actions run [34166330426](https://github.com/BrysinSS/ai-accountant-orchestra/actions/runs/34166330426) completed successfully for pushed commit `fd97cb54259a38229286e8d74e1005a786239025`. Both matrix jobs completed with `success`:
+
+- `test (3.11)`
+- `test (3.12)`
+
+Each job performed a clean dependency installation from `requirements.txt` and ran `python -m pytest -q`.
 
 ## Known limitations
 
