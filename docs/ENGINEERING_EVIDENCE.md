@@ -4,12 +4,12 @@ Verification date: 2026-09-08 (Europe/Amsterdam).
 
 ## Local verification
 
-- Tested commit: `3eeb26a` (documentation commit over the completed code and CI configuration).
+- Tested commit: `7f8ce9eba5acbdfb19b17221b7cb6bfe0c36461e`.
 - Clean environment: Python 3.12.10 virtual environment created outside the repository.
 - Installation: `python -m pip install -r requirements.txt` completed from the declared file.
 - Pytest: 9.1.1.
-- Exact result: 36 collected, 36 passed, 0 skipped, 0 failed, 0 errors.
-- Additional environment: Python 3.14.3 / pytest 9.0.2 also produced 36 passed, but 3.14 is not part of the declared CI matrix.
+- Exact result: 37 collected, 37 passed, 0 skipped, 0 failed, 0 errors. The managed local filesystem emitted one non-test-failing pytest cache warning.
+- Additional environment: Python 3.14.3 / pytest 9.0.2 also produced 37 passed, but 3.14 is not part of the declared CI matrix.
 
 ## End-to-end scenario
 
