@@ -1,61 +1,25 @@
-# Architecture Diagram
-
-Below is the high-level architecture of the AI-Accountant-Orchestra project.
-
----
-
-## Mermaid Diagram
+# Recipe execution architecture
 
 ```mermaid
 flowchart TD
+  CLI[CLI parameters] --> C[Recipe controller]
+  Y[YAML recipe and config] --> C
+  C --> L[Load and normalize]
+  L --> V[Return validation report]
+  V --> S[Summarize]
+  S --> E[Export JSON and Markdown]
+  C --> LOG[NDJSON logs and error artifacts]
+```
 
-    A[Input CSV / Data Source] --> B[tools.data_io.loader]
-    B --> C[tools.validation.schema]
-    C --> D[tools.analysis.tax]
-    D --> E[tools.analysis.bookkeeping]
+[The controller](../orchestrator/controller.py) calls the Python functions named in each recipe. Parameters can refer to previous step results. Exceptions fail the run by default; continuation can be configured.
 
-    E --> F[orchestrator.controller]
-    F --> G[agents/*]
+The bundled [BTW recipe](../recipes/btw_return.yml) runs loading, validation, summary and rendering. It does not invoke [the VAT functions](../tools/analysis/tax.py). Its tax metadata is fixed demonstration data.
 
-    G --> H[workspace/reports]
-    F --> I[workspace/logs]
+Validation currently checks column presence and returns a report. The normalized DataFrame lacks the original schema's column names, so the demo returns `valid: false`. The controller does not treat that boolean as a failed gate.
 
-    subgraph Recipes
-        R1[recipes/btw_return.yml]
-        R2[recipes/test_load.yml]
-    end
+The `--ask` route parses period text with regex. Generic agent steps are no-ops. No implemented LLM processing is claimed.
 
-    R1 --> F
-    R2 --> F
-Description
-1. Data Layer
-Raw transactions are loaded via tools.data_io.loader, using paths from config.yaml.
-
-2. Validation Layer
-tools.validation.schema ensures data types and fields match the expected format.
-This mirrors real-world bookkeeping ingestion requirements.
-
-3. Analysis Layer
-tools.analysis.tax applies Dutch VAT and KOR logic.
-tools.analysis.bookkeeping aggregates categories and totals.
-
-4. Orchestrator Layer
-orchestrator.controller executes YAML-defined workflows,
-calling agents and tools in the correct order.
-
-5. Agent Layer
-Reusable processors that execute pipeline steps (LLM-ready for the future).
-
-6. Output Layer
-Everything goes to workspace/:
-
-logs/*.ndjson
-
-reports/*.json
-
-summaries
-
-This makes the system auditable and reproducible.
+[Quick start and limitations](../README.md).
 
 
 
