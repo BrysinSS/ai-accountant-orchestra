@@ -76,6 +76,10 @@ class NDJSONLogger:
         except Exception:
             pass
 
+
+class ValidationFailure(ValueError):
+    """A mandatory validation report marked the input invalid."""
+
 # --------------------------- Config / placeholders --------------------------
 
 _MISSING = object()
@@ -252,7 +256,10 @@ def _classify_result(value: Any) -> tuple[str, Any]:
     return ("other", repr(value))
 
 def _should_continue(step_cfg: dict, policy: dict) -> bool:
-    if "continue_on_error" in step_cfg:
+    options = step_cfg.get("options", {}) or {}
+    if "continue_on_error" in options:
+        return bool(options["continue_on_error"])
+    if "continue_on_error" in step_cfg:  # legacy recipe shape
         return bool(step_cfg["continue_on_error"])
     return bool(policy.get("continue_on_error", False))
 
@@ -321,12 +328,7 @@ def run_recipe(recipe_path: str, overrides: dict | None = None) -> dict:
                 args = resolve_placeholders_for_step(raw_args, cfg, steps_ctx, gvars)
 
                 if step_type == "agent":
-                    duration = (perf_counter() - t0) * 1000
-                    cache_results[step_id] = {"todo": "Agent step not implemented yet."}
-                    cache_meta[step_id] = {"type": "agent_todo"}
-                    artifacts[step_id] = {"type": "agent_todo", "value": "NOOP"}
-                    log.info(event="agent", step=step_id, status="OK", duration_ms=duration, message="TODO: implement agent")
-                    continue
+                    raise NotImplementedError("Agent recipe steps are not implemented.")
 
                 fn_path: str = step["fn"]
 
@@ -343,6 +345,10 @@ def run_recipe(recipe_path: str, overrides: dict | None = None) -> dict:
                 r_type, r_val = _classify_result(result)
                 artifacts[step_id] = {"type": r_type, "value": r_val}
 
+                if isinstance(result, dict) and result.get("valid") is False:
+                    details = "; ".join(map(str, result.get("errors", []))) or "validation failed"
+                    raise ValidationFailure(details)
+
                 duration = (perf_counter() - t0) * 1000
                 log.info(event="tool", step=step_id, status="OK", duration_ms=duration, message=f"fn={fn_path}")
 
@@ -358,18 +364,22 @@ def run_recipe(recipe_path: str, overrides: dict | None = None) -> dict:
                     "error": f"{type(e).__name__}: {e}",
                     "traceback": traceback.format_exc(limit=5),
                 }
-                with errors_path().open("w", encoding="utf-8") as ef:
+                error_path = errors_path()
+                err_obj["error_path"] = str(error_path)
+                with error_path.open("w", encoding="utf-8") as ef:
                     json.dump(err_obj, ef, ensure_ascii=False, indent=2)
+
+                artifacts["failure"] = {"type": "failure", "value": err_obj}
 
                 if not _should_continue(step, policy):
                     log.close()
-                    return {"status": "FAILED", "artifacts": artifacts}
+                    return {"status": "FAILED", "artifacts": artifacts, "log_path": str(log.path)}
 
         log.close()
         if failures == 0:
-            return {"status": "OK", "artifacts": artifacts}
+            return {"status": "OK", "artifacts": artifacts, "log_path": str(log.path)}
         else:
-            return {"status": "PARTIAL_SUCCESS", "artifacts": artifacts}
+            return {"status": "PARTIAL_SUCCESS", "artifacts": artifacts, "log_path": str(log.path)}
 
     except Exception as e:  # catastrophic error (before steps loop)
         log.error(event="fatal", step="controller", duration_ms=0.0, message=f"{type(e).__name__}: {e}")
@@ -381,6 +391,12 @@ def run_recipe(recipe_path: str, overrides: dict | None = None) -> dict:
             "error": f"{type(e).__name__}: {e}",
             "traceback": traceback.format_exc(limit=5),
         }
-        with errors_path().open("w", encoding="utf-8") as ef:
+        error_path = errors_path()
+        err_obj["error_path"] = str(error_path)
+        with error_path.open("w", encoding="utf-8") as ef:
             json.dump(err_obj, ef, ensure_ascii=False, indent=2)
-        return {"status": "FAILED", "artifacts": {}}
+        return {
+            "status": "FAILED",
+            "artifacts": {"failure": {"type": "failure", "value": err_obj}},
+            "log_path": str(log.path),
+        }

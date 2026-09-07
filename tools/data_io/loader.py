@@ -1,16 +1,12 @@
 # tools/data_io/loader.py
 from __future__ import annotations
 
-import io
-import json
-import math
 import os
 from typing import Dict, Any, Iterable
 
 import numpy as np
 import pandas as pd
 import yaml
-from datetime import datetime
 from string import Formatter
 
 
@@ -98,9 +94,16 @@ def _parse_date_yyyymmdd(series: pd.Series) -> pd.Series:
     return s.dt.strftime("%Y-%m-%d")
 
 
-def load_dataframe(path: str, *, config_path: str = "config.yaml") -> "pd.DataFrame":
+def load_source_dataframe(path: str) -> "pd.DataFrame":
+    """Load a source table without changing its schema."""
+    df = _read_table_by_extension(path)
+    df.columns = df.columns.astype(str).str.strip()
+    return df
+
+
+def normalize_dataframe(df: "pd.DataFrame", *, config_path: str = "config.yaml") -> "pd.DataFrame":
     """
-    Load external data and build an internal DataFrame with REQUIRED columns:
+    Normalize a validated source DataFrame to the internal columns:
       - date (ISO8601 'YYYY-MM-DD')
       - description (str)
       - amount_gross (float)
@@ -141,9 +144,7 @@ def load_dataframe(path: str, *, config_path: str = "config.yaml") -> "pd.DataFr
     if not isinstance(desc_fmt, str) or not desc_fmt:
         raise ValueError("Config must include non-empty 'description_format' string.")
 
-    # Read source table
-    df_src = _read_table_by_extension(path)
-    # Normalize column names (strip only)
+    df_src = df.copy()
     df_src.columns = df_src.columns.astype(str).str.strip()
 
     # --- Validate mandatory source columns depending on schema rules ---
@@ -158,8 +159,12 @@ def load_dataframe(path: str, *, config_path: str = "config.yaml") -> "pd.DataFr
 
     # amount: prefer preferred; else fallback expression requires two columns
     amount_cfg = mapping.get("amount", {})
-    preferred_amount_col = amount_cfg.get("preferred", "final_amount")
-    fallback_expr = amount_cfg.get("fallback_expr", "total_amount - discount_amount")
+    preferred_amount_col = amount_cfg.get(
+        "preferred", mapping.get("amount_gross_preferred", "final_amount")
+    )
+    fallback_expr = amount_cfg.get(
+        "fallback_expr", mapping.get("amount_gross_fallback", "total_amount - discount_amount")
+    )
     # Parse fallback expression "A - B" (very simple)
     fb_left, fb_right = None, None
     if fallback_expr and "-" in fallback_expr:
@@ -170,17 +175,14 @@ def load_dataframe(path: str, *, config_path: str = "config.yaml") -> "pd.DataFr
     # category
     src_category_col = mapping.get("category", "aisle")
 
-    # Build required column list for validation
-    required_cols = {src_date_col, src_category_col}
-    required_cols.update(description_required_cols)
-    # For amount: either preferred exists OR fallback pair exist; require both sets for clear message.
-    # We'll validate presence and then choose at runtime.
-    if preferred_amount_col:
-        required_cols.add(preferred_amount_col)
-    if fb_left and fb_right:
-        required_cols.update([fb_left, fb_right])
-
+    required_cols = {src_date_col, src_category_col, *description_required_cols}
     _validate_columns(df_src, required_cols, ctx=f"schema '{schema}'")
+    has_preferred = preferred_amount_col in df_src.columns
+    has_fallback = bool(fb_left and fb_right and fb_left in df_src.columns and fb_right in df_src.columns)
+    if not has_preferred and not has_fallback:
+        raise ValueError(
+            "Cannot resolve amount_gross: need the preferred amount column or both fallback columns."
+        )
 
     # --- Build internal columns ---
     # date
@@ -256,3 +258,8 @@ def load_dataframe(path: str, *, config_path: str = "config.yaml") -> "pd.DataFr
     # - Do not clamp; downstream steps will include them in totals.
 
     return internal
+
+
+def load_dataframe(path: str, *, config_path: str = "config.yaml") -> "pd.DataFrame":
+    """Backward-compatible convenience API: load source data, then normalize it."""
+    return normalize_dataframe(load_source_dataframe(path), config_path=config_path)

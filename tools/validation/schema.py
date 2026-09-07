@@ -14,6 +14,8 @@ No business semantics beyond presence checks.
 
 from typing import Dict, List, Tuple
 
+import pandas as pd
+
 KAGGLE_GROCERY_V1 = "kaggle_grocery_v1"
 
 REQUIRED_ALWAYS = ["transaction_date", "product_name"]
@@ -57,6 +59,36 @@ def validate_dataframe(df, schema_id: str = KAGGLE_GROCERY_V1) -> Dict[str, obje
       - valid (bool)
       - errors (list of strings)
     """
+    if not isinstance(df, pd.DataFrame):
+        return {
+            "schema_id": schema_id,
+            "valid": False,
+            "errors": ["Input is not a pandas DataFrame."],
+            "warnings": [],
+            "info": {"row_count": 0},
+        }
+
     cols = list(df.columns)
     valid, errs = validate_dataset_columns(cols, schema_id=schema_id)
-    return {"schema_id": schema_id, "valid": valid, "errors": errs}
+    if valid:
+        dates = pd.to_datetime(df["transaction_date"], errors="coerce")
+        if dates.isna().any():
+            errs.append(f"Invalid transaction_date values: {int(dates.isna().sum())} row(s).")
+        amount_column = "final_amount" if "final_amount" in df.columns else None
+        if amount_column is None and {"total_amount", "discount_amount"}.issubset(df.columns):
+            total = pd.to_numeric(df["total_amount"], errors="coerce")
+            discount = pd.to_numeric(df["discount_amount"], errors="coerce")
+            invalid_amounts = total.isna() | discount.isna()
+        else:
+            invalid_amounts = pd.to_numeric(df[amount_column], errors="coerce").isna()
+        if invalid_amounts.any():
+            errs.append(f"Invalid monetary values: {int(invalid_amounts.sum())} row(s).")
+
+    warnings = ["Dataset contains no rows."] if df.empty else []
+    return {
+        "schema_id": schema_id,
+        "valid": not errs,
+        "errors": errs,
+        "warnings": warnings,
+        "info": {"row_count": int(len(df)), "column_count": int(len(df.columns))},
+    }
