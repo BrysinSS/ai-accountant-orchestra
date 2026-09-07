@@ -3,16 +3,23 @@
 ## Unreleased
 
 ### Added
-- Added accountant agent (`agents/accountant_agent.py`) with natural-language BTW handling.
-- Added accounting mode in CLI: `python main.py --ask "<query>"` triggers accountant agent when `--recipe` is not provided.
-- Automatic BTW period parsing including RU/EN variants (e.g. "Q3 2025", "3 квартал 2025").
-- Automatic brief generation in `workspace/drafts/brief_Qn-YYYY.md` (Gross / VAT / KOR).
+- Inclusive `Qn-YYYY` period parsing and transaction filtering.
+- Structured source validation reports with errors, warnings and informational counts.
+- Controller, CLI, period, validation, VAT/KOR, artifact, log and end-to-end tests.
+- Engineering baseline and evidence documents.
 
 ### Changed
-- `ui/cli.py`: extended `run_cli` to support accountant fallback mode when only `--ask` is provided.
+- The BTW demonstration recipe now validates raw source columns before normalization, filters the selected quarter and calls the existing VAT calculation module.
+- Invalid mandatory validation stops dependent steps and fails the pipeline.
+- CLI exit code `0` is now reserved for an `OK` pipeline result; failures return non-zero.
+- Monetary report values use explicit cent rounding with Decimal `ROUND_HALF_UP`.
+- The main quarter recipe explicitly disables the simplified KOR switch.
+- CI installs dependencies and runs pytest on Python 3.11 and 3.12.
+- IDE files, bytecode and generated runtime output were removed from version control and ignored.
 
 ### Breaking Changes
-- None (added functionality does not break existing recipe-based workflows).
+- `--ask` without `--recipe` no longer invokes unfinished agent scaffolding; it is only an optional period parser for an explicit recipe.
+- `save_summary` requires an explicit `period` and no longer derives VAT values during export.
 
 
 ## [0.1.0] - 2025-11-06
